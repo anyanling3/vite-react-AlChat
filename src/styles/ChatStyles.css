@@ -1,0 +1,35 @@
+/* src/styles/ChatStyles.css */
+
+/* 自定义滚动条样式 - 适用于带有 custom-scrollbar 类的元素 */
+.custom-scrollbar {
+    /* 确保有滚动条可以应用样式 */
+    overflow-x: hidden;
+    /* 隐藏水平滚动条 */
+    overflow-y: auto;
+    /* 显示垂直滚动条 */
+
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #dcdce1 #f3f3f5;
+}
+
+/* WebKit browsers (Chrome, Safari, newer Edge) */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    /* 垂直滚动条宽度 */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f3f3f5;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #dcdce1;
+    border-radius: 3px;
+    border: none;
+}
+
+/* 隐藏滚动条按钮 (上下箭头) */
+.custom-scrollbar::-webkit-scrollbar-button {
+    display: none;
+}
