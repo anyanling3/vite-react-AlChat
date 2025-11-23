@@ -6,6 +6,11 @@ import { zhCN } from 'date-fns/locale';
 // 代码块高亮模块
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';// oneLight 是另一个常用浅色主题
+// 代码复制
+import { toast } from 'react-toastify';
+import { CopyToClipboard } from 'react-copy-to-clipboard';
+import { Copy } from '@icon-park/react';
+
 const MessageItem = ({ message }) => {
     const { id, role, content, isLoading, timestamp } = message;
     // 确定发送者信息 
@@ -82,22 +87,63 @@ const MessageItem = ({ message }) => {
                                 // 自定义代码块渲染
                                 code({ node, inline, className, children, ...props }) {
                                     const match = /language-(\w+)/.exec(className || '');
-                                    return !inline && match ? (
-                                        <SyntaxHighlighter
-                                            {...props}
-                                            children={String(children).replace(/\n$/, '')} // 移除末尾换行符
-                                            style={oneDark} // 应用主题
-                                            language={match[1]} // 提取语言类型
-                                            PreTag="div" // 使用 div 包裹 pre 标签，有时有助于样式
-                                        />
-                                    ) : (
-                                        // 行内代码或未指定语言的代码块
-                                        <code {...props} className={className}>
-                                            {children}
-                                        </code>
-                                    );
-                                }
+                                    const language = match && match[1] ? match[1] : ''; // 提取语言或设为空
+                                    const codeString = String(children).replace(/\n$/, ''); // 获取代码字符串
 
+                                    if (!inline && language) {
+                                        // 是块级代码且有语言
+                                        return (
+                                            <div style={codeBlockStyles.container}>
+                                                {/* 代码块标题栏 */}
+                                                <div style={{ ...codeBlockStyles.header, marginBottom: 0 }}>
+                                                    <span style={codeBlockStyles.languageLabel}>
+                                                        {language.charAt(0).toUpperCase() + language.slice(1)} {/* 首字母大写 */}
+                                                    </span>
+                                                    {/*复制按钮 */}
+                                                    <CopyToClipboard
+                                                        text={codeString}
+                                                        onCopy={() => {
+                                                            toast.success('代码已复制到剪贴板！');
+                                                        }}
+                                                    >
+                                                        <button
+                                                            style={{
+                                                                ...codeBlockStyles.copyButton,
+                                                                '&:hover': {
+                                                                    backgroundColor: 'rgba(189, 147, 249, 0.2)',
+                                                                    borderColor: '#ff79c6',
+                                                                },
+                                                                '&:focus': {
+                                                                    outline: '2px solid #ff79c6',
+                                                                    outlineOffset: '1px',
+                                                                }
+                                                            }}
+                                                            aria-label="复制代码"
+                                                        >
+                                                            {/* 使用 IconPark 图标 */}
+                                                            <Copy theme="outline" size="16" fill="#bd93f9" />
+                                                        </button>
+                                                    </CopyToClipboard>
+                                                </div>
+                                                {/* 语法高亮的代码主体 */}
+                                                <SyntaxHighlighter
+                                                    {...props}
+                                                    children={codeString}
+                                                    style={oneDark}
+                                                    language={language}
+                                                    PreTag="div" // SyntaxHighlighter 内部会生成 pre 标签
+                                                />
+                                            </div>
+                                        );
+                                    } else {
+                                        // 行内代码或未指定语言的块级代码
+                                        return (
+                                            <code {...props} className={className} style={{ ...props.style, ...codeBlockStyles.inlineCode }}>
+                                                {children}
+                                            </code>
+                                        );
+                                    }
+                                }
                             }}
                         />
                     ) : (
@@ -234,6 +280,60 @@ const markdownStyles = {
         '&:last-child': { // 最后一列去除右边框
             borderRight: 'none',
         }
+    }
+};
+// 定义代码块及其子元素的样式 
+const codeBlockStyles = {
+    container: {
+        borderRadius: '6px',
+        overflow: 'hidden', // 确保子元素圆角被裁剪
+        marginBottom: '1em', // 与其他段落的间距
+        border: '1px solid #44475a', // 与 oneDark 主题色调协调的边框
+        backgroundColor: '#282a36',
+    },
+    header: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '6px 10px',
+        backgroundColor: '#282a36', // 与 oneDark 背景色相近或稍浅
+        color: '#f8f8f2', // 与 oneDark 文字色相近
+        fontSize: '14px',
+        // fontFamily: 'monospace', // 使用等宽字体
+    },
+    languageLabel: {
+        fontWeight: 'bold',
+    },
+    copyButton: {
+        backgroundColor: 'transparent',
+        color: '#bd93f9',
+        border: '1px solid #bd93f9',
+        borderRadius: '4px',
+        padding: '4px 4px', // 微调内边距
+        cursor: 'pointer',
+        fontSize: '12px',
+        transition: 'all 0.2s ease-in-out', // 添加过渡效果
+        display: 'flex', // 使用 Flexbox 使图标居中
+        alignItems: 'center',
+        justifyContent: 'center',
+
+        '&:hover': {
+            backgroundColor: 'rgba(189, 147, 249, 0.2)', // 半透明紫色背景
+            borderColor: '#ff79c6', // 边框颜色变化
+        },
+        '&:focus': {
+            outline: '2px solid #ff79c6', // 聚焦时轮廓
+            outlineOffset: '1px',
+        }
+    },
+    // 行内代码样式
+    inlineCode: {
+        backgroundColor: '#f6f8fa', // 浅灰色背景
+        padding: '2px 4px',
+        borderRadius: '3px',
+        border: '1px solid #d1d5da', // 浅灰色边框
+        fontSize: '85%', // 稍小的字体
+        fontFamily: 'monospace', // 等宽字体
     }
 };
 
