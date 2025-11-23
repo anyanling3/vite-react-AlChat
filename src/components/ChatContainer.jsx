@@ -42,7 +42,13 @@ const ChatContainer = () => {
             setMessages(prevMessages =>
                 prevMessages.map(msg =>
                     msg.id === aiLoadingMessage.id
-                        ? { ...msg, isLoading: false, content: `这是 AI 的回复: "${content}"` }
+                        ? {
+                            ...msg,
+                            isLoading: false, // 设置成功状态
+                            // --- 修改：在冒号后添加 \n ---
+                            content: `这是 AI 的回复:\n${content}...`
+                            // --- ---
+                        }
                         : msg
                 )
             );

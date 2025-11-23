@@ -2,6 +2,7 @@
 import React, { useRef, useEffect } from 'react';
 import MessageItem from './MessageItem';
 import '../styles/ChatStyles.css';
+import ReactMarkdown from 'react-markdown';
 
 const MessageList = ({ messages }) => {
     const messagesEndRef = useRef(null);

@@ -1,94 +1,166 @@
 import React from 'react';
-import { ROLE_USER, ROLE_ASSISTANT } from '../types';
+import ReactMarkdown from 'react-markdown';
+import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 
 const MessageItem = ({ message }) => {
-    const { role, content, isLoading } = message;
+    const { id, role, content, isLoading, timestamp } = message;
+    // 确定发送者信息 
+    const senderInfo = role === 'user' ? { name: '我', avatar: 'U' } : { name: 'AI 助手', avatar: '🤖' };
 
-    // 根据角色决定样式
-    const isUser = role === ROLE_USER;
-    const bubbleStyle = isUser ? styles.userBubble : styles.aiBubble;
-    const containerStyle = isUser ? styles.userContainer : styles.aiContainer;
-    const avatarSrc = isUser ? 'https://api.dicebear.com/7.x/miniavs/svg?seed=1' : 'https://api.dicebear.com/7.x/bottts/svg?seed=2'; // 使用 DiceBear 生成随机头像
+    if (isLoading) {
+        return (
+            <div style={{ ...styles.messageRow, ...(role === 'user' ? styles.userRow : styles.aiRow) }}>
+                <div style={{
+                    ...styles.avatar,
+                    ...(role === 'user' ? styles.userAvatar : styles.aiAvatar)
+                }}>{senderInfo.avatar}</div>
+                <div>
+                    <div style={styles.senderName}>{senderInfo.name}</div>
+                    <div style={{ ...styles.messageItem, ...styles.aiMessage }}>
+                        <div style={styles.loadingDots}>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div style={containerStyle}>
-            {/* 头像 */}
-            <img src={avatarSrc} alt={`${role} avatar`} style={styles.avatar} />
-
-            {/* 消息气泡 */}
-            <div style={bubbleStyle}>
-                {/* 角色名称 */}
-                <div style={styles.roleName}>{isUser ? 'You' : 'AI Assistant'}</div>
-
-                {/* 消息内容 */}
-                <div style={styles.content}>
-                    {isLoading ? (
-                        <span style={{ fontStyle: 'italic', color: '#999' }}>AI 正在思考...</span>
+        <div style={{ ...styles.messageRow, ...(role === 'user' ? styles.userRow : styles.aiRow) }}>
+            <div style={{
+                ...styles.avatar,
+                ...(role === 'user' ? styles.userAvatar : styles.aiAvatar),
+                order: role === 'user' ? 2 : 1, // 用户头像排最后（靠右），AI头像排最前（靠左）
+                backgroundColor: role === 'user' ? '#4532fd' : '#eee',
+                color: role === 'user' ? 'white' : 'black', // 用户头像文字为白色
+            }}>{senderInfo.avatar}</div>
+            <div style={{ order: role === 'user' ? 1 : 2, flex: 1, display: 'flex', flexDirection: 'column', alignItems: role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div style={styles.senderName}>{senderInfo.name}</div>
+                <div style={{
+                    ...styles.messageItem,
+                    ...(role === 'user' ? styles.userMessage : styles.aiMessage)
+                }}>
+                    {role === 'assistant' ? (
+                        <ReactMarkdown>{content}</ReactMarkdown>
                     ) : (
-                        content
+                        <div>{content}</div>
                     )}
                 </div>
+                {/* 显示时间戳 */}
+                {timestamp && (
+                    <div style={styles.timestamp}>
+                        {format(new Date(timestamp), 'MM/dd HH:mm', { locale: zhCN })}
+                    </div>
+                )}
             </div>
         </div>
     );
 };
 
 const styles = {
-    // 用户消息容器 (靠右)
-    userContainer: {
+    // 消息行的整体布局
+    messageRow: {
         display: 'flex',
-        justifyContent: 'flex-start',   //靠右
-        alignItems: 'flex-start',
-        flexDirection: 'row-reverse', // 反转顺序：气泡 -> 头像
+        marginBottom: '10px',
+        width: '100%',
     },
-    // AI 消息容器 (靠左)
-    aiContainer: {
-        display: 'flex',
-        justifyContent: 'flex-start',
-        alignItems: 'flex-start', // 顶部对齐
+    userRow: {
+        justifyContent: 'flex-end', // 用户消息靠右
     },
-    // 头像样式
+    aiRow: {
+        justifyContent: 'flex-start', // AI 消息靠左
+    },
+    //头像样式 
     avatar: {
         width: '30px',
         height: '30px',
         borderRadius: '50%',
-        margin: '0 0 4px 10px',
+        backgroundColor: '#eee',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 'bold',
+        fontSize: '14px',
+        flexShrink: 0, // 防止头像被压缩
     },
-    // 用户气泡样式
-    userBubble: {
-        backgroundColor: '#f5f7ff',
-        color: '#222',
-        padding: '8px 10px',
-        borderRadius: '8px 4px 8px 8px', // 圆角，右下角尖角
+    // 分别为用户和AI头像设置边距
+    aiAvatar: {
+        marginRight: '10px',
+    },
+    userAvatar: {
+        marginLeft: '10px',
+    },
+    // 发送者名称样式 
+    senderName: {
+        fontSize: '12px',
+        color: '#666',
+        marginBottom: '2px',
+        paddingLeft: '5px', // 名称左边距
+        paddingRight: '5px', // 名称右边距
+    },
+    messageItem: {
         maxWidth: '70%',
-        wordWrap: 'break-word', // 长单词换行
-        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+        padding: '10px 15px',
+        borderRadius: '8px',
+        wordWrap: 'break-word',
+        lineHeight: 1.5,
+        position: 'relative', // 为可能的内部绝对定位元素做准备
+    },
+    // 用户消息样式
+    userMessage: {
+        backgroundColor: '#f5f7ff',
+        // color: 'black', 
+    },
+    // AI 消息样式 
+    aiMessage: {
+        backgroundColor: '#fff',
+        // color: 'black', 
+    },
+
+    loadingDots: {
+        display: 'flex',
+        alignItems: 'center',
+    },
+
+    dot: {
+        width: '8px',
+        height: '8px',
+        backgroundColor: '#999',
+        borderRadius: '50%',
+        margin: '0 2px',
+        animation: 'bounce 1.5s infinite',
 
     },
-    // AI 气泡样式
-    aiBubble: {
-        backgroundColor: '#fff',
-        color: '#222',
-        border: '1px solid #eee',
-        padding: '8px 10px',
-        margin: '0 0 0 10px',
-        borderRadius: '4px 8px 8px 8px', // 圆角，左下角尖角
-        maxWidth: '70%',
-        wordWrap: 'break-word', // 长单词换行
-        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-    },
-    // 角色名称
-    roleName: {
-        fontSize: '0.8em',
-        fontWeight: 'bold',
-        marginBottom: '4px',
-        opacity: 0.8,
-    },
-    // 消息内容
-    content: {
-        fontSize: '1em',
-        lineHeight: '1.4',
+    timestamp: {
+        fontSize: '10px',
+        color: '#999',
+        textAlign: 'right', // 时间戳靠右对齐
+        marginTop: '4px',
+        paddingRight: '10px', // 右侧内边距
     },
 };
+
+// 确保动画样式存在
+const styleSheet = document.styleSheets[0];
+const keyFrames = `
+  @keyframes bounce {
+    0%, 80%, 100% {
+      transform: scale(0);
+    }
+    40% {
+      transform: scale(1.0);
+    }
+  }
+`;
+
+try {
+    styleSheet.insertRule(keyFrames, styleSheet.cssRules.length);
+} catch (e) {
+    console.warn("Could not insert keyframe rule", e);
+}
 
 export default MessageItem;
