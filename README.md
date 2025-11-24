@@ -1,4 +1,4 @@
-# Chat Application with Code Highlighting and Copy Functionality
+# 前端技术作业：实现AI对话框功能
 
 ## 整体设计思路
 
@@ -19,7 +19,7 @@
 ### 技术选型
 
 - **渲染层（DOM）**：标准HTML DOM结合React组件化思想构建界面。
-- **核心框架**：React v19.1作为前端框架，提供了强大的组件管理和状态管理能力。
+- **核心框架**：React v18.2作为前端框架，提供了强大的组件管理和状态管理能力。
 - **其他依赖**：
   - `react-markdown`用于解析并渲染Markdown格式的消息。
   - `remark-gfm`支持GitHub Flavored Markdown特性。
