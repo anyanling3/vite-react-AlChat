@@ -9,9 +9,11 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';// oneL
 // 代码复制
 import { toast } from 'react-toastify';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
-import { Copy } from '@icon-park/react';
+// 引入 IconPark 图标
+import { Copy, Redo } from '@icon-park/react';
+import { ROLE_USER, ROLE_ASSISTANT } from '../types';
 
-const MessageItem = ({ message }) => {
+const MessageItem = ({ message, onRegenerate }) => {
     const { id, role, content, isLoading, timestamp } = message;
     // 确定发送者信息 
     const senderInfo = role === 'user' ? { name: '我', avatar: 'U' } : { name: 'AI 助手', avatar: '🤖' };
@@ -150,6 +152,45 @@ const MessageItem = ({ message }) => {
                         <div>{content}</div>
                     )}
                 </div>
+                {/* AI 消息的快捷操作按钮 */}
+                {role === 'assistant' && (
+                    <div style={styles.actionButtonsContainer}>
+                        {/* 复制内容按钮 */}
+                        <CopyToClipboard
+                            text={content}
+                            onCopy={() => toast.success('消息内容已复制到剪贴板！')}
+                        >
+                            <button
+                                style={styles.actionButton}
+                                aria-label="复制内容"
+                            >
+                                <Copy theme="outline" size="16" fill="#666" />
+                                <span style={styles.actionButtonText}>复制</span>
+                            </button>
+                        </CopyToClipboard>
+
+                        {/* --- 修改按钮：使用 Redo 图标 --- */}
+                        <button
+                            style={styles.actionButton}
+                            onClick={() => {
+                                console.log("Regenerate button clicked for message ID:", id);
+                                console.log("onRegenerate function:", onRegenerate); // 调试日志
+                                if (onRegenerate) { // 检查函数是否存在
+                                    onRegenerate(id); // 调用父组件传递的函数
+                                } else {
+                                    console.error("onRegenerate function is not passed correctly to MessageItem!");
+                                    toast.error("重新生成功能暂时不可用");
+                                }
+                            }}
+                            aria-label="重新生成"
+                            disabled={isLoading} // 如果正在加载，禁用按钮
+                        >
+                            {/* 使用 Redo 组件替换原来的 Refresh */}
+                            <Redo theme="outline" size="16" fill="#666" /> {/* <--- 修改点 2 */}
+                            <span style={styles.actionButtonText}>重新生成</span>
+                        </button>
+                    </div>
+                )}
                 {/* 显示时间戳 */}
                 {timestamp && (
                     <div style={styles.timestamp}>
@@ -241,6 +282,33 @@ const styles = {
         textAlign: 'right', // 时间戳靠右对齐
         marginTop: '4px',
         paddingRight: '10px', // 右侧内边距
+    },
+    actionButtonsContainer: {
+        display: 'flex',
+        gap: '10px', // 按钮之间的间距
+        marginTop: '5px', // 与消息内容的间距
+        alignSelf: 'flex-start', // 靠左对齐
+    },
+    actionButton: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px', // 图标和文字的间距
+        padding: '4px 8px',
+        fontSize: '12px',
+        color: '#666',
+        backgroundColor: 'transparent',
+        border: '1px solid #ddd',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease-in-out',
+        '&:hover': {
+            backgroundColor: '#f5f5f5',
+            borderColor: '#bbb',
+        },
+        '&:focus': {
+            outline: '2px solid #007bff',
+            outlineOffset: '1px',
+        }
     },
 
 };

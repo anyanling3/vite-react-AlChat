@@ -94,13 +94,75 @@ const ChatContainer = () => {
                     msg.id === aiLoadingMessage.id
                         ? {
                             ...msg, // 保留 id, role, timestamp
-                            isLoading: false, // 移除 isLoading 标志
+                            isLoading: false,
                             content: `这是 AI 的回复:\n\n${selectedResponse.content}` // 更新内容
                         }
                         : msg
                 )
             );
             // 收到完整回复后，重置等待状态
+            setIsWaitingForResponse(false);
+        }, 1000); // 1秒延迟
+    };
+    // 处理重新生成的函数 
+    const handleRegenerate = (aiMessageIdToRegenerate) => {
+        console.log(`Attempting to regenerate message with ID: ${aiMessageIdToRegenerate}`);
+
+        // 1. 找到需要重新生成的消息对象
+        const messageToRegenerate = messages.find(msg => msg.id === aiMessageIdToRegenerate && msg.role === ROLE_ASSISTANT);
+        if (!messageToRegenerate) {
+            console.warn("Message to regenerate not found or not an AI message.");
+            toast.warn("无法找到要重新生成的消息。");
+            return;
+        }
+
+        // 2. 找到触发该 AI 消息的上一条用户消息
+        let triggerUserMessage = null;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg.id === aiMessageIdToRegenerate) continue; // 跳过要重新生成的 AI 消息本身
+            if (msg.role === ROLE_USER) {
+                triggerUserMessage = msg;
+                break;
+            }
+        }
+
+        if (!triggerUserMessage) {
+            console.warn("No triggering user message found for regeneration.");
+            return;
+        }
+
+        // 3. 设置等待状态 
+        setIsWaitingForResponse(true);
+
+        // 4. 添加一个临时的 loading 状态的 AI 消息来替换旧的 AI 消息
+        updateMessages(prevMessages =>
+            prevMessages.map(msg =>
+                msg.id === aiMessageIdToRegenerate
+                    ? { ...msg, isLoading: true, content: '' } // 开始加载，清空内容
+                    : msg
+            )
+        );
+
+        // 5. 模拟网络延迟后，替换 loading 消息为新的模拟回复
+        setTimeout(() => {
+            const randomIndex = Math.floor(Math.random() * mockResponses.length);
+            const selectedResponse = mockResponses[randomIndex];
+
+            updateMessages(prevMessages =>
+                prevMessages.map(msg =>
+                    msg.id === aiMessageIdToRegenerate // 使用原来的 AI 消息 ID
+                        ? {
+                            ...msg, // 保留 id, role, timestamp
+                            isLoading: false, // 结束加载
+                            content: `这是 AI 的回复 (已重新生成):\n\n${selectedResponse.content}`, // 更新内容
+                            // 更新时间戳
+                            timestamp: Date.now()
+                        }
+                        : msg
+                )
+            );
+            // 重置等待状态
             setIsWaitingForResponse(false);
         }, 1000); // 1秒延迟
     };
@@ -151,7 +213,7 @@ const ChatContainer = () => {
                     flexDirection: 'column',
                     //height: '100%'
                 }}>
-                    <MessageList messages={messages} />
+                    <MessageList messages={messages} onRegenerate={handleRegenerate} />
                     {/* 输入区域 */}
                     <InputArea onSend={handleSendMessage} isDisabled={isWaitingForResponse} />
                 </div>

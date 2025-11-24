@@ -4,9 +4,7 @@
 .custom-scrollbar {
     /* 确保有滚动条可以应用样式 */
     overflow-x: hidden;
-    /* 隐藏水平滚动条 */
     overflow-y: auto;
-    /* 显示垂直滚动条 */
 
     /* Firefox */
     scrollbar-width: thin;

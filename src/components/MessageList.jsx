@@ -2,9 +2,8 @@
 import React, { useRef, useEffect } from 'react';
 import MessageItem from './MessageItem';
 import '../styles/ChatStyles.css';
-import ReactMarkdown from 'react-markdown';
 
-const MessageList = ({ messages }) => {
+const MessageList = ({ messages, onRegenerate }) => {
     const messagesEndRef = useRef(null);
 
     // 自动滚动到底部的逻辑
@@ -21,7 +20,11 @@ const MessageList = ({ messages }) => {
         <div style={styles.messageList} className="custom-scrollbar">
             {messages.length > 0 ? (
                 messages.map((message) => (
-                    <MessageItem key={message.id} message={message} />
+                    <MessageItem
+                        key={message.id}
+                        message={message}
+                        onRegenerate={onRegenerate}
+                    />
                 ))
             ) : (
                 <div style={{ textAlign: 'center', color: '#888', padding: '20px' }}>
@@ -41,7 +44,7 @@ const styles = {
         flexDirection: 'column',
         gap: '15px', // 消息之间的间距
         overflowX: 'hidden', // 隐藏水平滚动条
-        // overflowY: 'auto',   // 关键：当内容超出时显示垂直滚动条
+        // overflowY: 'auto',   
     },
 };
 
