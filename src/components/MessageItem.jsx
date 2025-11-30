@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import remarkGfm from 'remark-gfm';
 import ReactMarkdown from 'react-markdown';
 import { format } from 'date-fns';
@@ -13,11 +13,79 @@ import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { Copy, Redo } from '@icon-park/react';
 import { ROLE_USER, ROLE_ASSISTANT } from '../types';
 
+// 打字机效果常量 q
+const STREAMING_SPEED = 20; // 毫秒/字符
+
 const MessageItem = ({ message, onRegenerate }) => {
-    const { id, role, content, isLoading, timestamp } = message;
-    // 确定发送者信息 
+    const { id, role, content, isLoading, timestamp, streamedContent = '' } = message;
+    // 确定发送者信息
     const senderInfo = role === 'user' ? { name: '我', avatar: 'U' } : { name: 'AI 助手', avatar: '🤖' };
 
+    // 用于控制打字机效果的状态 ---
+    const [displayedContent, setDisplayedContent] = useState('');
+    const displayTimerRef = useRef(null); // <-- 使用 ref 来存储定时器 ID
+
+    // 处理打字机效果的副作用 ---
+    useEffect(() => {
+        // 清除之前的定时器，防止累积
+        if (displayTimerRef.current) {
+            clearTimeout(displayTimerRef.current);
+            displayTimerRef.current = null;
+        }
+
+        let isActive = true; // 用于防止组件卸载后的状态更新
+
+        // 如果是 AI 消息，且不在 loading 状态，并且有 streamedContent 需要显示
+        if (role === ROLE_ASSISTANT && !isLoading && streamedContent) {
+
+            const typeNextCharacter = () => {
+                // 再次检查组件是否仍然挂载
+                if (!isActive) return;
+
+                setDisplayedContent(prevContent => {
+                    const nextIndex = prevContent.length + 1;
+                    const newContent = streamedContent.substring(0, nextIndex);
+
+                    // 如果还有内容要显示，则安排下一次更新
+                    if (nextIndex < streamedContent.length) {
+                        displayTimerRef.current = setTimeout(typeNextCharacter, STREAMING_SPEED);
+                    }
+
+                    return newContent;
+                });
+            };
+
+            // 启动第一个定时器，仅当当前显示内容少于待显示内容时
+            if (displayedContent.length < streamedContent.length) {
+                displayTimerRef.current = setTimeout(typeNextCharacter, STREAMING_SPEED);
+            }
+        }
+
+        // 清理函数：组件卸载时清除定时器并设置 isActive 为 false
+        return () => {
+            isActive = false;
+            if (displayTimerRef.current) {
+                clearTimeout(displayTimerRef.current);
+                displayTimerRef.current = null;
+            }
+        };
+    }, [streamedContent, role, isLoading]); // 依赖项主要是 streamedContent, role, isLoading
+
+    // 如果消息加载完成并且没有 streamedContent (可能是旧的非流式消息或错误情况)，则直接显示 content 
+    useEffect(() => {
+
+        if (role === ROLE_ASSISTANT && !isLoading && !streamedContent && content) {
+            setDisplayedContent(content); // 直接显示完整内容
+        }
+
+        if (role === ROLE_ASSISTANT && !isLoading && !streamedContent && !content) {
+            // 如果两者都为空，可能是个占位符或特殊情况，可以留空或显示默认文本
+            setDisplayedContent(""); // 默认已经是空的
+        }
+    }, [role, isLoading, streamedContent, content]); // 依赖项
+
+
+    // Loading 状态的渲染
     if (isLoading) {
         return (
             <div style={{ ...styles.messageRow, ...(role === 'user' ? styles.userRow : styles.aiRow) }}>
@@ -39,6 +107,91 @@ const MessageItem = ({ message, onRegenerate }) => {
         );
     }
 
+    // AI 消息内容渲染逻辑 
+    const renderAiContent = () => {
+        // 优先渲染正在流式传输的内容 (displayedContent)
+        const contentToShow = displayedContent || content || '';
+
+        return (
+            <ReactMarkdown
+                children={contentToShow} // 使用正在显示的内容
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    table({ node, ...props }) {
+                        return (
+                            <div style={{ overflowX: 'auto', width: '100%' }}>
+                                <table style={markdownStyles.table} {...props} />
+                            </div>
+                        );
+                    },
+                    thead({ node, ...props }) {
+                        return <thead style={markdownStyles.thead} {...props} />;
+                    },
+                    tbody({ node, ...props }) {
+                        return <tbody style={markdownStyles.tbody} {...props} />;
+                    },
+                    tr({ node, ...props }) {
+                        return <tr style={markdownStyles.tr} {...props} />;
+                    },
+                    th({ node, ...props }) {
+                        return <th style={markdownStyles.th} {...props} />;
+                    },
+                    td({ node, ...props }) {
+                        return <td style={markdownStyles.td} {...props} />;
+                    },
+                    code({ node, inline, className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const language = match && match[1] ? match[1] : '';
+                        const codeString = String(children).replace(/\n$/, '');
+
+                        if (!inline && language) {
+                            return (
+                                <div style={codeBlockStyles.container}>
+                                    <div style={{ ...codeBlockStyles.header, marginBottom: 0 }}>
+                                        <span style={codeBlockStyles.languageLabel}>
+                                            {language.charAt(0).toUpperCase() + language.slice(1)}
+                                        </span>
+                                        <CopyToClipboard
+                                            text={codeString}
+                                            onCopy={() => {
+                                                toast.success('代码已复制到剪贴板！');
+                                            }}
+                                        >
+                                            <button
+                                                style={codeBlockStyles.copyButton}
+                                                aria-label="复制代码"
+                                            >
+                                                <Copy theme="outline" size="16" fill="#bd93f9" />
+                                            </button>
+                                        </CopyToClipboard>
+                                    </div>
+                                    <SyntaxHighlighter
+                                        {...props}
+                                        children={codeString}
+                                        style={oneDark}
+                                        language={language}
+                                        PreTag="div"
+                                    />
+                                </div>
+                            );
+                        } else {
+                            return (
+                                <code {...props}
+                                    className={className}
+                                    style={{ ...props.style, ...codeBlockStyles.inlineCode }}
+                                >
+                                    {children}
+                                </code>
+                            );
+                        }
+                    }
+                }}
+            />
+        );
+    };
+
+
+
     return (
         <div style={{ ...styles.messageRow, ...(role === 'user' ? styles.userRow : styles.aiRow) }}>
             <div style={{
@@ -58,98 +211,12 @@ const MessageItem = ({ message, onRegenerate }) => {
                     ...styles.messageItem,
                     ...(role === 'user' ? styles.userMessage : styles.aiMessage)
                 }}>
+                    {/* --- 修改：根据角色渲染不同内容 --- */}
                     {role === 'assistant' ? (
-                        <ReactMarkdown
-                            children={content} // 使用 children prop
-                            remarkPlugins={[remarkGfm]} // 启用 GFM
-                            components={{
-                                // 自定义表格相关元素样式
-                                table({ node, ...props }) {
-                                    return (
-                                        <div style={{ overflowX: 'auto', width: '100%' }}> {/* 为了防止表格溢出容器 */}
-                                            <table style={markdownStyles.table} {...props} />
-                                        </div>
-                                    );
-                                },
-                                thead({ node, ...props }) {
-                                    return <thead style={markdownStyles.thead} {...props} />;
-                                },
-                                tbody({ node, ...props }) {
-                                    return <tbody style={markdownStyles.tbody} {...props} />;
-                                },
-                                tr({ node, ...props }) {
-                                    return <tr style={markdownStyles.tr} {...props} />;
-                                },
-                                th({ node, ...props }) {
-                                    return <th style={markdownStyles.th} {...props} />;
-                                },
-                                td({ node, ...props }) {
-                                    return <td style={markdownStyles.td} {...props} />;
-                                },
-                                // 自定义代码块渲染
-                                code({ node, inline, className, children, ...props }) {
-                                    const match = /language-(\w+)/.exec(className || '');
-                                    const language = match && match[1] ? match[1] : ''; // 提取语言或设为空
-                                    const codeString = String(children).replace(/\n$/, ''); // 获取代码字符串
-
-                                    if (!inline && language) {
-                                        // 是块级代码且有语言
-                                        return (
-                                            <div style={codeBlockStyles.container}>
-                                                {/* 代码块标题栏 */}
-                                                <div style={{ ...codeBlockStyles.header, marginBottom: 0 }}>
-                                                    <span style={codeBlockStyles.languageLabel}>
-                                                        {language.charAt(0).toUpperCase() + language.slice(1)} {/* 首字母大写 */}
-                                                    </span>
-                                                    {/*复制按钮 */}
-                                                    <CopyToClipboard
-                                                        text={codeString}
-                                                        onCopy={() => {
-                                                            toast.success('代码已复制到剪贴板！');
-                                                        }}
-                                                    >
-                                                        <button
-                                                            style={{
-                                                                ...codeBlockStyles.copyButton,
-                                                                '&:hover': {
-                                                                    backgroundColor: 'rgba(189, 147, 249, 0.2)',
-                                                                    borderColor: '#ff79c6',
-                                                                },
-                                                                '&:focus': {
-                                                                    outline: '2px solid #ff79c6',
-                                                                    outlineOffset: '1px',
-                                                                }
-                                                            }}
-                                                            aria-label="复制代码"
-                                                        >
-                                                            {/* 使用 IconPark 图标 */}
-                                                            <Copy theme="outline" size="16" fill="#bd93f9" />
-                                                        </button>
-                                                    </CopyToClipboard>
-                                                </div>
-                                                {/* 语法高亮的代码主体 */}
-                                                <SyntaxHighlighter
-                                                    {...props}
-                                                    children={codeString}
-                                                    style={oneDark}
-                                                    language={language}
-                                                    PreTag="div" // SyntaxHighlighter 内部会生成 pre 标签
-                                                />
-                                            </div>
-                                        );
-                                    } else {
-                                        // 行内代码或未指定语言的块级代码
-                                        return (
-                                            <code {...props} className={className} style={{ ...props.style, ...codeBlockStyles.inlineCode }}>
-                                                {children}
-                                            </code>
-                                        );
-                                    }
-                                }
-                            }}
-                        />
+                        renderAiContent() // 调用新的 AI 内容渲染函数
                     ) : (
-                        <div>{content}</div>
+                        // 用户消息保持原样，但应用 whitespace 样式
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
                     )}
                 </div>
                 {/* AI 消息的快捷操作按钮 */}
@@ -215,7 +282,7 @@ const styles = {
     aiRow: {
         justifyContent: 'flex-start', // AI 消息靠左
     },
-    //头像样式 
+    //头像样式
     avatar: {
         width: '30px',
         height: '30px',
@@ -235,7 +302,7 @@ const styles = {
     userAvatar: {
         marginLeft: '10px',
     },
-    // 发送者名称样式 
+    // 发送者名称样式
     senderName: {
         fontSize: '12px',
         color: '#666',
@@ -254,12 +321,12 @@ const styles = {
     // 用户消息样式
     userMessage: {
         backgroundColor: '#f5f7ff',
-        // color: 'black', 
+        // color: 'black',
     },
-    // AI 消息样式 
+    // AI 消息样式
     aiMessage: {
         backgroundColor: '#fff',
-        // color: 'black', 
+        // color: 'black',
     },
 
     loadingDots: {
@@ -350,7 +417,7 @@ const markdownStyles = {
         }
     }
 };
-// 定义代码块及其子元素的样式 
+// 定义代码块及其子元素的样式
 const codeBlockStyles = {
     container: {
         borderRadius: '6px',

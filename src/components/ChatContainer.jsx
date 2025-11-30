@@ -4,6 +4,7 @@ import MessageList from './MessageList';
 import InputArea from './InputArea';
 import { ROLE_USER, ROLE_ASSISTANT } from '../types';
 import mockResponses from '../mockResponses';
+import { toast } from 'react-toastify';
 
 const ChatContainer = () => {
     // 状态：存储所有消息
@@ -56,11 +57,13 @@ const ChatContainer = () => {
     };
 
     // 处理发送消息的逻辑
-    const handleSendMessage = (content) => {
+    const handleSendMessage = async (content) => {
         // 空消息或者等待响应时不能发送
         if (!content.trim() || isWaitingForResponse) return;
+
         //发送前设置等待状态
         setIsWaitingForResponse(true);
+
         // 创建用户消息对象
         const userMessage = {
             id: Date.now().toString(), // 简单生成唯一ID
@@ -72,43 +75,77 @@ const ChatContainer = () => {
         // 更新消息列表，添加用户消息
         updateMessages(prevMessages => [...prevMessages, userMessage]);
 
-        // 创建一个 loading 状态的 AI 消息
-        const aiLoadingMessage = {
-            id: `loading-${Date.now()}`,
+        // 创建一个带有 streamedContent 的初始 AI 消息
+        const aiStreamingMessage = {
+            id: `streaming-${Date.now()}`,
             role: ROLE_ASSISTANT,
-            content: '', // 内容为空表示加载中
+            content: '', // 最终完整内容，流式结束后填充
+            streamedContent: '', // 当前正在流式传输的内容
             timestamp: Date.now(),
-            isLoading: true // 添加一个标志位
+            isLoading: false
         };
-        updateMessages(prevMessages => [...prevMessages, aiLoadingMessage]);
+        updateMessages(prevMessages => [...prevMessages, aiStreamingMessage]);
 
-        // 模拟网络延迟后，替换 loading 消息为实际回复
-        setTimeout(() => {
-            // 从 mockResponses 中随机选择一条
+        try {
+            // 1. 获取模拟回复
             const randomIndex = Math.floor(Math.random() * mockResponses.length);
             const selectedResponse = mockResponses[randomIndex];
-            // console.log("Selected Mock Response Type:", selectedResponse.type); // 可选：用于调试
+            const fullResponseText = `这是 AI 的回复:\n\n${selectedResponse.content}`;
 
+            // 2. 模拟流式接收
+            await simulateStreamingResponse(aiStreamingMessage.id, fullResponseText);
+
+        } catch (error) {
+            console.error("Error during streaming simulation:", error);
+            // 处理错误，例如显示错误消息
             updateMessages(prevMessages =>
                 prevMessages.map(msg =>
-                    msg.id === aiLoadingMessage.id
-                        ? {
-                            ...msg, // 保留 id, role, timestamp
-                            isLoading: false,
-                            content: `这是 AI 的回复:\n\n${selectedResponse.content}` // 更新内容
-                        }
+                    msg.id === aiStreamingMessage.id
+                        ? { ...msg, streamedContent: "抱歉，回复时出现了错误。", content: "抱歉，回复时出现了错误。" }
                         : msg
                 )
             );
-            // 收到完整回复后，重置等待状态
+        } finally {
             setIsWaitingForResponse(false);
-        }, 1000); // 1秒延迟
+        }
+    };
+
+    // 模拟流式响应的辅助函数
+    const simulateStreamingResponse = (messageId, fullText) => {
+        return new Promise((resolve) => { // 返回 Promise 以便 await
+            let index = 0;
+            const interval = setInterval(() => {
+                if (index <= fullText.length) {
+                    const currentChunk = fullText.substring(0, index);
+                    updateMessages(prevMessages =>
+                        prevMessages.map(msg =>
+                            msg.id === messageId
+                                ? { ...msg, streamedContent: currentChunk }
+                                : msg
+                        )
+                    );
+                    index++;
+                } else {
+                    // 流式传输完成
+                    clearInterval(interval);
+                    // 更新最终的 content 字段
+                    updateMessages(prevMessages =>
+                        prevMessages.map(msg =>
+                            msg.id === messageId
+                                ? { ...msg, content: fullText } // 设置最终内容
+                                : msg
+                        )
+                    );
+                    resolve(); // 解析 Promise
+                }
+            }, 20); // 每 20ms 发送一个字符，模拟流速
+        });
     };
     // 处理重新生成的函数 
-    const handleRegenerate = (aiMessageIdToRegenerate) => {
+    const handleRegenerate = async (aiMessageIdToRegenerate) => {
         console.log(`Attempting to regenerate message with ID: ${aiMessageIdToRegenerate}`);
 
-        // 1. 找到需要重新生成的消息对象
+        // 1找到需要重新生成的消息对象
         const messageToRegenerate = messages.find(msg => msg.id === aiMessageIdToRegenerate && msg.role === ROLE_ASSISTANT);
         if (!messageToRegenerate) {
             console.warn("Message to regenerate not found or not an AI message.");
@@ -116,7 +153,7 @@ const ChatContainer = () => {
             return;
         }
 
-        // 2. 找到触发该 AI 消息的上一条用户消息
+        // 找到触发该 AI 消息的上一条用户消息
         let triggerUserMessage = null;
         for (let i = messages.length - 1; i >= 0; i--) {
             const msg = messages[i];
@@ -132,39 +169,39 @@ const ChatContainer = () => {
             return;
         }
 
-        // 3. 设置等待状态 
+        // 设置等待状态 
         setIsWaitingForResponse(true);
 
-        // 4. 添加一个临时的 loading 状态的 AI 消息来替换旧的 AI 消息
-        updateMessages(prevMessages =>
-            prevMessages.map(msg =>
-                msg.id === aiMessageIdToRegenerate
-                    ? { ...msg, isLoading: true, content: '' } // 开始加载，清空内容
-                    : msg
-            )
-        );
-
-        // 5. 模拟网络延迟后，替换 loading 消息为新的模拟回复
-        setTimeout(() => {
-            const randomIndex = Math.floor(Math.random() * mockResponses.length);
-            const selectedResponse = mockResponses[randomIndex];
-
+        try {
+            // 重置目标消息为流式初始状态
             updateMessages(prevMessages =>
                 prevMessages.map(msg =>
-                    msg.id === aiMessageIdToRegenerate // 使用原来的 AI 消息 ID
-                        ? {
-                            ...msg, // 保留 id, role, timestamp
-                            isLoading: false, // 结束加载
-                            content: `这是 AI 的回复 (已重新生成):\n\n${selectedResponse.content}`, // 更新内容
-                            // 更新时间戳
-                            timestamp: Date.now()
-                        }
+                    msg.id === aiMessageIdToRegenerate
+                        ? { ...msg, streamedContent: '', content: '', isLoading: false } // 重置内容
                         : msg
                 )
             );
-            // 重置等待状态
+
+            // 模拟获取新的 AI 回复 
+            const randomIndex = Math.floor(Math.random() * mockResponses.length);
+            const selectedResponse = mockResponses[randomIndex];
+            const fullResponseText = `这是 AI 的回复 (已重新生成):\n\n${selectedResponse.content}`;
+
+            // 模拟流式接收新回复 
+            await simulateStreamingResponse(aiMessageIdToRegenerate, fullResponseText);
+
+        } catch (error) {
+            console.error("Error during regeneration streaming simulation:", error);
+            updateMessages(prevMessages =>
+                prevMessages.map(msg =>
+                    msg.id === aiMessageIdToRegenerate
+                        ? { ...msg, streamedContent: "抱歉，重新生成时出现了错误。", content: "抱歉，重新生成时出现了错误。" }
+                        : msg
+                )
+            );
+        } finally {
             setIsWaitingForResponse(false);
-        }, 1000); // 1秒延迟
+        }
     };
     // 添加一个清除历史记录的功能
     const clearHistory = () => {
